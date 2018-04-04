@@ -35,13 +35,26 @@ int receive(void * self, local_id from, Message * msg){
 
 	msg->s_header.s_magic = MESSAGE_MAGIC + 1;
 
-	if(read(fd, msg, MAX_MESSAGE_LEN) == -1) {
+	int readAmount;
+
+	readAmount = read(fd, msg, MAX_MESSAGE_LEN);
+
+	if (readAmount > 0){
+		int nbytes;
+		ioctl(fd, FIONREAD, &nbytes);
+		fprintf(eventFileLogFd, "Read amount: %d\n", readAmount);
+		fprintf(eventFileLogFd, "IOCTL: %d\n", nbytes);
+		fflush(eventFileLogFd);
+	}
+
+	if(readAmount == -1) {
 		return -1;
 	}
 
 	if (msg->s_header.s_magic != MESSAGE_MAGIC) {
 		return -2;
 	}
+
 	return 0;
 }
 
