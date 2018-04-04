@@ -63,6 +63,8 @@ void childProcess(int (*procFds)[2], pid_t parent, pid_t self, local_id id) {
 			fflush(eventFileLogFd);
 			exit(-1);
 		}
+		fprintf(eventFileLogFd, "Process %d\tReceived: %s", id, message.s_payload);
+		fflush(eventFileLogFd);
 		if(message.s_header.s_type == STARTED) ++i;
 	}
 	fprintf(eventFileLogFd, log_received_all_started_fmt, id);
@@ -139,6 +141,8 @@ int main(int argc, char* argv[]) {
 				perror("pipe");
 				return errno;
 			}
+			fcntl(pipesMatrix[i][j][IN], F_SETPIPE_SZ, 1048576);
+			fcntl(pipesMatrix[i][j][OUT], F_SETPIPE_SZ, 1048576);
 			if (j == PARENT_ID){
 				fprintf(pipeFileLogFd, parentChildPipesOpened, i, pipesMatrix[i][PARENT_ID][OUT], pipesMatrix[i][PARENT_ID][IN]);
 			} else {

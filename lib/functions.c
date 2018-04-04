@@ -1,4 +1,7 @@
 #include "functions.h"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 int numberOfProcesses;
 FILE *eventFileLogFd, *pipeFileLogFd;
@@ -9,7 +12,6 @@ int send(void * self, local_id dst, const Message * msg) {
 	if (msg->s_header.s_magic != MESSAGE_MAGIC) {
 		return -1;
 	}
-
 
 	if(write(fd, msg, MAX_MESSAGE_LEN) == -1){
 		return -1;
@@ -36,6 +38,7 @@ int receive(void * self, local_id from, Message * msg){
 	if(read(fd, msg, MAX_MESSAGE_LEN) == -1) {
 		return -1;
 	}
+
 	if (msg->s_header.s_magic != MESSAGE_MAGIC) {
 		return -2;
 	}
