@@ -21,10 +21,13 @@ int send(void * self, local_id dst, const Message * msg) {
 }
 
 int send_multicast(void * self, const Message * msg) {
-	for (local_id i = 0; i < numberOfProcesses; i++) {
-		int resultCode = send(self, i, msg);
-		if (resultCode != 0) {
-			return -i;
+	local_id id = 0;
+	while (id < numberOfProcesses) {
+		int resultCode = send(self, (int)id, msg);
+		if (resultCode == 0) {
+			++id;
+		} else if (errno != EAGAIN) {
+			return -id;
 		}
 	}
 	return 0;
@@ -38,14 +41,6 @@ int receive(void * self, local_id from, Message * msg){
 	int readAmount;
 
 	readAmount = read(fd, msg, MAX_MESSAGE_LEN);
-
-	if (readAmount > 0){
-		int nbytes;
-		ioctl(fd, FIONREAD, &nbytes);
-		fprintf(eventFileLogFd, "Read amount: %d\n", readAmount);
-		fprintf(eventFileLogFd, "IOCTL: %d\n", nbytes);
-		fflush(eventFileLogFd);
-	}
 
 	if(readAmount == -1) {
 		return -1;
@@ -65,7 +60,7 @@ int receive_any(void * self, Message * msg) {
 		for (local_id i = 1; i < length; ++i) {
 			resultCode = receive(self, i, msg);
 			if(resultCode == 0) break;
-			if(resultCode == -1 && errno != EAGAIN) {
+			if(errno != EAGAIN) {
 				return -i;
 			}
 		}

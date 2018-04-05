@@ -22,6 +22,11 @@
 
 extern int numberOfProcesses;
 extern FILE *eventFileLogFd, *pipeFileLogFd;
-int realIdOfProcess(local_id selfId, local_id procId);
+local_id realIdOfProcess(local_id selfId, local_id procId);
+
+enum {
+	READ_ERROR_FMT,
+	WRITE_ERROR_FMT
+};
 
 #endif //FIRST_MAIN_H

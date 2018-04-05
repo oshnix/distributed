@@ -7,6 +7,7 @@ const char *parentChildPipesOpened = "Parent <- Child №%d pipes opened.\tWrite
 const char *childPipesOpened = "Child №%d -> Child №%d pipes opened.\tWrite: %d\tRead: %d\n";
 
 FILE *eventFileLogFd, *pipeFileLogFd;
+char outputBuffer[4096];
 
 int numberOfProcesses;
 
@@ -34,41 +35,73 @@ void parseInputKey(int argc, char **argv){
 	numberOfProcesses = number;
 }
 
+void duplicateOutputToTerminal(FILE *filePointer, char *outputString, int error){
+	fprintf(filePointer, outputString);
+	if (error == 0) {
+		fprintf(stdout, outputString);
+	} else {
+		fprintf(stderr, outputString);
+	}
+	fflush(filePointer);
+}
+
+void printIOError(local_id id, local_id procId, int operationCode) {
+	switch(operationCode) {
+		case READ_ERROR_FMT:
+			sprintf(outputBuffer, "ERROR: read error in %d from %d with code: %d, msg: %s\n", id, procId, errno, strerror(errno));
+			duplicateOutputToTerminal(eventFileLogFd, outputBuffer, 1);
+			break;
+		case WRITE_ERROR_FMT:
+			sprintf(outputBuffer, "ERROR: write error in %d to %d with code: %d, msg: %s\n", id, procId, errno, strerror(errno));
+			duplicateOutputToTerminal(eventFileLogFd, outputBuffer, 1);
+			break;
+	}
+	fflush(eventFileLogFd);
+	exit(-1);
+}
+
+void processRequest(local_id id, int *startedCount, int *doneCount, Message *msg, void *self) {
+	int resCode = receive_any(self, msg);
+	if (resCode != 0) {
+		printIOError(id, realIdOfProcess(id, -resCode), READ_ERROR_FMT);
+	} else {
+		switch (msg->s_header.s_type) {
+			case STARTED:
+				(*startedCount)--;
+				break;
+			case DONE:
+				(*doneCount)--;
+				break;
+			default:
+				break;
+		}
+	}
+}
+
 void childProcess(int (*procFds)[2], pid_t parent, pid_t self, local_id id) {
+
+	int startedMessages = numberOfProcesses - 1, doneMessages = numberOfProcesses - 1;
+
 	Message message;
 	message.s_header.s_magic = MESSAGE_MAGIC;
 	message.s_header.s_type = STARTED;
 	sprintf (message.s_payload, log_started_fmt, id, self, parent);
 	message.s_header.s_payload_len = strlen(message.s_payload);
 
-	fprintf(eventFileLogFd, message.s_payload);
-	fflush(eventFileLogFd);
+	duplicateOutputToTerminal(eventFileLogFd, message.s_payload, 0);
 
 	int resCode = send_multicast(procFds, &message);
 
-	fprintf(eventFileLogFd, "Process %d sent all messages\n", id);
-	fflush(eventFileLogFd);
-
 	if (resCode != 0) {
-		fprintf(eventFileLogFd, "Message not sent to process %d with error: %s\n", realIdOfProcess(id, -resCode), strerror(errno));
-		fflush(eventFileLogFd);
-		exit(-1);
+		printIOError(id, realIdOfProcess(id, resCode), WRITE_ERROR_FMT);
 	}
 
-	int i = 0;
-	while (i < numberOfProcesses - 1) {
-		resCode = receive_any(procFds, &message);
-		if (resCode != 0) {
-			fprintf(eventFileLogFd, "Message not received from process %d with error: %s\n", realIdOfProcess(id, -resCode), strerror(errno));
-			fflush(eventFileLogFd);
-			exit(-1);
-		}
-		fprintf(eventFileLogFd, "Process %d\tReceived: %s", id, message.s_payload);
-		fflush(eventFileLogFd);
-		if(message.s_header.s_type == STARTED) ++i;
+	while (startedMessages > 0) {
+		processRequest(id, &startedMessages, &doneMessages, &message, procFds);
 	}
-	fprintf(eventFileLogFd, log_received_all_started_fmt, id);
-	fflush(eventFileLogFd);
+
+	sprintf(outputBuffer, log_received_all_started_fmt, id);
+	duplicateOutputToTerminal(eventFileLogFd, outputBuffer, 0);
 
 	doSomethingUseful();
 
@@ -77,42 +110,35 @@ void childProcess(int (*procFds)[2], pid_t parent, pid_t self, local_id id) {
 	sprintf (message.s_payload, log_done_fmt, id);
 	message.s_header.s_payload_len = strlen(message.s_payload);
 
-	fprintf(eventFileLogFd, message.s_payload);
-	fflush(eventFileLogFd);
+	duplicateOutputToTerminal(eventFileLogFd, message.s_payload, 0);
 
-	/*
 	resCode = send_multicast(procFds, &message);
+
 	if (resCode != 0) {
-		fprintf(eventFileLogFd, "Message not sent to process %d with error: %s\n", realIdOfProcess(id, -resCode), strerror(errno));
-		fflush(eventFileLogFd);
-		exit(-1);
+		printIOError(id, realIdOfProcess(id, resCode), READ_ERROR_FMT);
 	}
 
-	i = 0;
-	while (i < numberOfProcesses - 1) {
-		resCode = receive_any(procFds, &message);
-		if (resCode != 0) {
-			fprintf(eventFileLogFd, "Message not received from process %d with error: %s\n", realIdOfProcess(id, -resCode), strerror(errno));
-			fflush(eventFileLogFd);
-			exit(-1);
-		}
-		if(message.s_header.s_type == DONE) {
-			fprintf(eventFileLogFd, "Process %d received done message", i);
-			fflush(eventFileLogFd);
-			++i;
-		}
+	while (doneMessages > 0) {
+		processRequest(id, &startedMessages, &doneMessages, &message, procFds);
 	}
-	fprintf(eventFileLogFd, log_received_all_done_fmt, id);*/
+
+	sprintf(outputBuffer, log_received_all_done_fmt, id);
+	duplicateOutputToTerminal(eventFileLogFd, outputBuffer, 0);
 	exit(0);
 }
 
-int realIdOfProcess(local_id selfId, local_id procId) {
+local_id realIdOfProcess(local_id selfId, local_id procId) {
 	if (selfId > procId) {
 		return procId;
 	} else {
 		return procId + 1;
 	}
 }
+
+int programIdOfProcess(local_id selfId, local_id procId) {
+	return selfId >= procId ? selfId -1 : selfId;
+}
+
 
 void prepareLogFiles() {
 	eventFileLogFd = fopen(events_log, MODE);
@@ -156,6 +182,7 @@ int main(int argc, char* argv[]) {
 	fflush(pipeFileLogFd);
 
 	for (local_id i = 1; i <= numberOfProcesses; ++i) {
+		dup2((long)eventFileLogFd, (long)stdout);
 		cpid = fork();
 		if (cpid == -1) {
 			perror("fork");
@@ -167,15 +194,15 @@ int main(int argc, char* argv[]) {
 			int procFds[numberOfProcesses][2];
 			for (int j = 1; j <= numberOfProcesses; ++j) {
 				for (int k = 0; k < numberOfProcesses; ++k) {
-					if (j != i) {
-						closePipe(i, cpid, pipesMatrix[j][k][OUT]);
-					} else {
+					if(j == i) {
 						procFds[k][OUT] = pipesMatrix[j][k][OUT];
-					}
-					if (realIdOfProcess(i, k) != j) {
-						closePipe(i, cpid, pipesMatrix[j][k][IN]);
 					} else {
-						procFds[k][IN] = pipesMatrix[j][k][IN];
+						closePipe(i, cpid, pipesMatrix[j][k][OUT]);
+						if (programIdOfProcess(i, j) != k) {
+							//closePipe(i, cpid, pipesMatrix[j][k][IN]);
+						} else {
+							procFds[programIdOfProcess(j, i)][IN] = pipesMatrix[j][k][IN];
+						}
 					}
 				}
 			}
@@ -199,23 +226,19 @@ int main(int argc, char* argv[]) {
 	fflush(pipeFileLogFd);
 
 	Message message;
-	int i = 0;
-	while (i < numberOfProcesses) {
-		receive_any(procFds, &message);
-		if(message.s_header.s_type == STARTED) {
-			++i;
-		}
+	int startedMessages = numberOfProcesses, doneMessages = numberOfProcesses;
+
+	while (startedMessages > 0) {
+		processRequest(PARENT_ID, &startedMessages, &doneMessages, &message, procFds);
 	}
 	fprintf(eventFileLogFd, log_received_all_started_fmt, PARENT_ID);
 	fflush(eventFileLogFd);
-/*
-	i = 0;
-	while (i < numberOfProcesses - 1) {
-		receive_any(procFds, &message);
-		if(message.s_header.s_type == DONE) ++i;
+
+	while (doneMessages > 0) {
+		processRequest(PARENT_ID, &startedMessages, &doneMessages, &message, procFds);
 	}
 	fprintf(eventFileLogFd, log_received_all_done_fmt, PARENT_ID);
-	fflush(eventFileLogFd);*/
+	fflush(eventFileLogFd);
 
 	for (int i = 0; i < numberOfProcesses; ++i) {
 		wait(NULL);
