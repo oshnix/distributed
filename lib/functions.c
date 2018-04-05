@@ -13,7 +13,7 @@ int send(void * self, local_id dst, const Message * msg) {
 		return -1;
 	}
 
-	if(write(fd, msg, MAX_MESSAGE_LEN) == -1){
+	if(write(fd, msg, sizeof(MessageHeader) + msg->s_header.s_payload_len) == -1){
 		return -1;
 	}
 
@@ -27,7 +27,7 @@ int send_multicast(void * self, const Message * msg) {
 		if (resultCode == 0) {
 			++id;
 		} else if (errno != EAGAIN) {
-			return -id;
+				return -id;
 		}
 	}
 	return 0;
@@ -35,18 +35,18 @@ int send_multicast(void * self, const Message * msg) {
 
 int receive(void * self, local_id from, Message * msg){
 	int fd = ((int (*)[2])self)[from][IN];
-
-	msg->s_header.s_magic = MESSAGE_MAGIC + 1;
-
 	int readAmount;
 
-	readAmount = read(fd, msg, MAX_MESSAGE_LEN);
+	readAmount = read(fd, msg, sizeof(MessageHeader));
 
 	if(readAmount == -1) {
 		return -1;
 	}
 
-	if (msg->s_header.s_magic != MESSAGE_MAGIC) {
+	if(readAmount > 0) {
+		readAmount = read(fd, msg->s_payload, msg->s_header.s_payload_len);
+		msg->s_payload[msg->s_header.s_payload_len] = 0;
+	} else {
 		return -2;
 	}
 

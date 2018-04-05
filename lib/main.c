@@ -2,7 +2,7 @@
 
 const char *key = "-p";
 const char *usageHelp = "Usage:\n\t$(command) -p $(number of processes)\n";
-const char *keyArgHelp = "number of processes should be positive number between 1 and 10\n";
+const char *keyArgHelp = "number of processes should be positive number between 1 and %d\n";
 const char *parentChildPipesOpened = "Parent <- Child №%d pipes opened.\tWrite: %d\tRead: %d\n";
 const char *childPipesOpened = "Child №%d -> Child №%d pipes opened.\tWrite: %d\tRead: %d\n";
 
@@ -29,7 +29,7 @@ void parseInputKey(int argc, char **argv){
 	}
 	number = atoi(argv[2]);
 	if(number <= 0 || number > MAX_PROCESS_ID) {
-		fprintf(stderr, keyArgHelp);
+		fprintf(stderr, keyArgHelp, MAX_PROCESS_ID);
 		exit(-3);
 	}
 	numberOfProcesses = number;
