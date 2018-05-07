@@ -1,0 +1,30 @@
+Process 1 (pid 10496, parent 10495) has STARTED
+Process 2 (pid 10497, parent 10495) has STARTED
+Process 3 (pid 10498, parent 10495) has STARTED
+Process 5 (pid 10500, parent 10495) has STARTED
+Process 6 (pid 10501, parent 10495) has STARTED
+Process 4 (pid 10499, parent 10495) has STARTED
+Process 7 (pid 10502, parent 10495) has STARTED
+Process 1 received all STARTED messages
+Process 4 received all STARTED messages
+Process 0 received all STARTED messages
+Process 3 received all STARTED messages
+Process 6 received all STARTED messages
+Process 5 received all STARTED messages
+Process 1 has DONE its work
+Process 4 has DONE its work
+Process 7 received all STARTED messages
+Process 3 has DONE its work
+Process 6 has DONE its work
+Process 5 has DONE its work
+Process 7 has DONE its work
+Process 2 received all STARTED messages
+Process 2 has DONE its work
+Process 0 received all DONE messages
+Process 1 received all DONE messages
+Process 5 received all DONE messages
+Process 3 received all DONE messages
+Process 4 received all DONE messages
+Process 2 received all DONE messages
+Process 6 received all DONE messages
+Process 7 received all DONE messages
