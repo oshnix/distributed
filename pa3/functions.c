@@ -1,7 +1,6 @@
 #include "functions.h"
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+
+timestamp_t lamportTime = 0;
 
 int numberOfProcesses;
 FILE *eventFileLogFd, *pipeFileLogFd;
@@ -10,7 +9,7 @@ int send(void * self, local_id dst, const Message * msg) {
 	int fd = ((int(*)[2])self)[dst][OUT];
 
 	Message *message = (Message*) msg;
-	message->s_header.s_local_time = get_physical_time();
+	message->s_header.s_local_time = get_lamport_time();
 
 	if (msg->s_header.s_magic != MESSAGE_MAGIC) {
 		return -1;
@@ -24,6 +23,7 @@ int send(void * self, local_id dst, const Message * msg) {
 }
 
 int send_multicast(void * self, const Message * msg) {
+	increaseLamportTime();
 	local_id id = 0;
 	while (id < numberOfProcesses) {
 		int resultCode = send(self, (int)id, msg);
@@ -53,7 +53,10 @@ int receive(void * self, local_id from, Message * msg){
 		if (msg->s_header.s_type == STARTED || msg->s_header.s_type == DONE)
 			msg->s_payload[msg->s_header.s_payload_len] = 0;
 	}
-
+	if (msg->s_header.s_local_time > get_lamport_time()) {
+		setLamportTime(msg->s_header.s_local_time);
+	}
+	increaseLamportTime();
 	return 0;
 }
 
@@ -73,5 +76,17 @@ int receive_any(void * self, Message * msg) {
 	}
 
 	return resultCode;
+}
+
+timestamp_t get_lamport_time() {
+	return lamportTime;
+}
+
+void increaseLamportTime() {
+	lamportTime += 1;
+}
+
+void setLamportTime(timestamp_t time) {
+	lamportTime = time;
 }
 

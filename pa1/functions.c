@@ -55,16 +55,20 @@ int receive(void * self, local_id from, Message * msg){
 
 int receive_any(void * self, Message * msg) {
 	int resultCode = -1;
+
 	int length = ((int (*)[2])self)[0][OUT] == -1 ? numberOfProcesses + 1 : numberOfProcesses;
+
 	while(resultCode != 0) {
 		for (local_id i = 1; i < length; ++i) {
 			resultCode = receive(self, i, msg);
 			if(resultCode == 0) break;
-			if(errno != EAGAIN) {
+			if(resultCode == -1 && errno != EAGAIN) {
 				return -i;
 			}
 		}
+        sleep(1);
 	}
+
 	return resultCode;
 }
 

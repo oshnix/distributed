@@ -17,6 +17,7 @@
 #include "pa2345.h"
 #include "ipc.h"
 #include "banking.h"
+#include "functions.h"
 
 #define OUT 1
 #define IN 0
@@ -26,10 +27,8 @@ typedef struct {
 	int **procFds;
 	int started;
 	int done;
-	char stop;
 	local_id id;
 	int balance;
-	void *structure;
 } ProcessInfo;
 
 extern int numberOfProcesses;

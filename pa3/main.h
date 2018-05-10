@@ -17,6 +17,7 @@
 #include "pa2345.h"
 #include "ipc.h"
 #include "banking.h"
+#include "functions.h"
 
 #define OUT 1
 #define IN 0
