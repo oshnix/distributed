@@ -18,6 +18,7 @@
 #include "ipc.h"
 #include "banking.h"
 #include "functions.h"
+#include "queue.h"
 
 #define OUT 1
 #define IN 0
@@ -29,6 +30,8 @@ typedef struct {
 	int done;
 	local_id id;
 	int balance;
+	queueStruct *queue;
+	int csReplyCount;
 } ProcessInfo;
 
 extern int numberOfProcesses;

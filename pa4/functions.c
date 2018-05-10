@@ -25,6 +25,10 @@ int send(void * self, local_id dst, const Message * msg) {
 int send_multicast(void * self, const Message * msg) {
 	increaseLamportTime();
 	local_id id = 0;
+	int type = msg->s_header.s_type;
+	if (type == CS_RELEASE || type == CS_REPLY || type == CS_REQUEST) {
+		id = 1;
+	}
 	while (id < numberOfProcesses) {
 		int resultCode = send(self, (int)id, msg);
 		if (resultCode == 0) {
@@ -63,16 +67,18 @@ int receive(void * self, local_id from, Message * msg){
 int receive_any(void * self, Message * msg) {
 	int resultCode = -1;
 
-	while(resultCode != 0) {
+	while(resultCode < 0) {
 		for (local_id i = 0; i < numberOfProcesses; ++i) {
 			resultCode = receive(self, i, msg);
-			if(resultCode == 0) break;
+			if(resultCode == 0) {
+				resultCode = i;
+				break;
+			};
 			if(resultCode == -1 && errno != EAGAIN) {
 				return -i;
 			}
 		}
 		usleep(1);
-        //usleep(100);
 	}
 
 	return resultCode;

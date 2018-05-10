@@ -13,6 +13,57 @@ char outputBuffer[4096];
 int numberOfProcesses;
 char mutex = 0;
 
+int request_cs(const void * self) {
+    ProcessInfo *info = (ProcessInfo*)self;
+
+    Message msg;
+    msg.s_header.s_magic = MESSAGE_MAGIC;
+    msg.s_header.s_type = CS_REQUEST;
+    sprintf(msg.s_payload, "");
+    msg.s_header.s_payload_len = 0;
+
+    send_multicast(info->procFds, &msg);
+
+    requestInfo req = { info->id, get_lamport_time() };
+
+    info->csReplyCount = numberOfProcesses - 1;
+
+    while (info->csReplyCount > 0) {
+        processRequest(info, &msg);
+    }
+
+    int index = findPositionAndAddElement(info->queue, &req);
+
+    while (index != info->queue->start) {
+        processRequest(info, &msg);
+    }
+
+    return 0;
+}
+
+
+int release_cs(const void * self) {
+    ProcessInfo *info = (ProcessInfo*)self;
+
+    Message msg;
+    msg.s_header.s_magic = MESSAGE_MAGIC;
+    msg.s_header.s_type = CS_RELEASE;
+    sprintf(msg.s_payload, "");
+    msg.s_header.s_payload_len = 0;
+
+    send_multicast(info->procFds, &msg);
+
+    info->csReplyCount = numberOfProcesses - 1;
+
+    while (info->csReplyCount > 0) {
+        processRequest(info, &msg);
+    }
+
+    removeFirstElement(info->queue);
+
+    return 0;
+}
+
 void parseInputKey(int argc, char **argv) {
     int number;
 
@@ -31,7 +82,7 @@ void parseInputKey(int argc, char **argv) {
     }
     numberOfProcesses = number;
 
-    if (argc >= 4 && strcmp(mutexKey, argv[3]) != 0) {
+    if (argc >= 4 && strcmp(mutexKey, argv[3]) == 0) {
         mutex = 1;
     }
 }
@@ -63,7 +114,7 @@ void printIOError(local_id id, local_id procId, int operationCode) {
 
 int processRequest(ProcessInfo *info, Message *msg) {
     int resCode = receive_any(info->procFds, msg);
-    if (resCode != 0) {
+    if (resCode < 0) {
         printIOError(info->id, programIdOfProcess(info->id, -resCode), READ_ERROR_FMT);
     } else {
         switch (msg->s_header.s_type) {
@@ -72,6 +123,30 @@ int processRequest(ProcessInfo *info, Message *msg) {
                 break;
             case DONE:
                 info->done--;
+                break;
+            case CS_REQUEST: {
+
+                local_id proc_id = realIdOfProcess(info->id, resCode);
+                timestamp_t time = msg->s_header.s_local_time;
+                requestInfo req = { proc_id, time };
+
+                findPositionAndAddElement(info->queue, &req);
+
+                increaseLamportTime();
+                msg->s_header.s_type = CS_REPLY;
+                send(info->procFds, resCode, msg);
+                break;
+            }
+            case CS_RELEASE: {
+                removeFirstElement(info->queue);
+                increaseLamportTime();
+                msg->s_header.s_type = CS_REPLY;
+                send(info->procFds, resCode, msg);
+
+                break;
+            }
+            case CS_REPLY:
+                info->csReplyCount--;
                 break;
             default:
                 break;
@@ -228,8 +303,11 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i <= MAX_T; i++) {
                 history.s_history[i].s_balance_pending_in = 0;
             }
+            queueStruct queue;
+            queue.length = 0;
+            queue.start = 0;
 
-            ProcessInfo info = {(int**)procFds, numberOfProcesses - 1, numberOfProcesses - 1, i, 0};
+            ProcessInfo info = {(int**)procFds, numberOfProcesses - 1, numberOfProcesses - 1, i, 0, &queue, 0};
             childProcess(selfPid, cpid, &info);
             break;
         }
@@ -253,7 +331,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    ProcessInfo info = {(int**)procFds, numberOfProcesses, numberOfProcesses, PARENT_ID, 0};
+    ProcessInfo info = {(int**)procFds, numberOfProcesses, numberOfProcesses, PARENT_ID, 0, NULL, 0};
 
     fflush(pipeFileLogFd);
 
