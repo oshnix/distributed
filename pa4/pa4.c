@@ -36,10 +36,6 @@ void parseInputKey(int argc, char **argv) {
     }
 }
 
-void doUsefulWork() {
-
-}
-
 void duplicateOutputToTerminal(FILE *filePointer, char *outputString, int error){
     fprintf(filePointer, "%s", outputString);
     if (error == 0) {
@@ -84,6 +80,20 @@ int processRequest(ProcessInfo *info, Message *msg) {
     return msg->s_header.s_type;
 }
 
+void doUsefulWork(ProcessInfo *info) {
+    int count = 5 * info->id;
+    for (int i = 1; i <= count; i++) {
+        if (mutex) {
+            request_cs(info);
+        }
+        sprintf(outputBuffer, log_loop_operation_fmt, info->id, i, count);
+        print(outputBuffer);
+        if (mutex) {
+            release_cs(info);
+        }
+    }
+}
+
 void childProcess(pid_t parent, pid_t self, ProcessInfo *info) {
 
     Message message;
@@ -107,7 +117,7 @@ void childProcess(pid_t parent, pid_t self, ProcessInfo *info) {
     sprintf(outputBuffer, log_received_all_started_fmt, get_lamport_time(), info->id);
     duplicateOutputToTerminal(eventFileLogFd, outputBuffer, 0);
 
-    doUsefulWork();
+    doUsefulWork(info);
 
     message.s_header.s_magic = MESSAGE_MAGIC;
     message.s_header.s_type = DONE;
